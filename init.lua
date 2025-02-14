@@ -50,6 +50,22 @@ Plug 'catppuccin/nvim', { 'as': 'catppuccin' }
 Plug 'nvim-telescope/telescope.nvim', { 'tag': '0.1.5' }
 Plug 'nvim-lua/plenary.nvim'
 
+" Commenting Plugin
+Plug 'numToStr/Comment.nvim'
+
+" Auto Pairs (Bracket Completion)
+Plug 'windwp/nvim-autopairs'
+
+" Auto-completion Plugin
+Plug 'hrsh7th/nvim-cmp'           " Main completion plugin
+Plug 'hrsh7th/cmp-nvim-lsp'       " LSP completion source
+Plug 'hrsh7th/cmp-buffer'         " Buffer completion source
+Plug 'hrsh7th/cmp-path'           " Path completion source
+Plug 'hrsh7th/cmp-cmdline'        " Command-line completion
+Plug 'L3MON4D3/LuaSnip'           " Snippet engine
+Plug 'saadparwaiz1/cmp_luasnip'   " Snippet completion source
+Plug 'windwp/nvim-autopairs'      " Bracket auto-completion (already added)
+
 call plug#end()
 ]]
 
@@ -131,6 +147,93 @@ else
   print("Catppuccin theme is not installed")
 end
 
-use 'numToStr/Comment.nvim'
-require('Comment').setup()
+-- ------------------------------
+-- Comment.nvim Plugin
+-- ------------------------------
+local status_comment, comment = pcall(require, "Comment")
+if status_comment then
+  comment.setup()
+else
+  print("Comment.nvim is not installed")
+end
 
+-- ========================================================================
+-- 6. AUTO PAIRS (Bracket Completion)
+-- ========================================================================
+local status_autopairs, autopairs = pcall(require, "nvim-autopairs")
+if status_autopairs then
+  autopairs.setup({
+    disable_filetype = { "TelescopePrompt", "vim" }, -- Disable in certain file types
+    check_ts = true, -- Use treesitter integration
+    map_cr = true,   -- Auto insert closing bracket after Enter
+    fast_wrap = {},  -- Enables fast wrap feature (Alt-E by default)
+  })
+else
+  print("nvim-autopairs is not installed")
+end
+
+-- If using nvim-cmp (autocompletion), integrate it with autopairs
+local cmp_autopairs_status, cmp_autopairs = pcall(require, "nvim-autopairs.completion.cmp")
+if cmp_autopairs_status then
+  local cmp_status, cmp = pcall(require, "cmp")
+  if cmp_status then
+    cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
+  end
+end
+
+-- ========================================================================
+-- 7. AUTOCOMPLETE CONFIGURATION (nvim-cmp)
+-- ========================================================================
+local cmp_status, cmp = pcall(require, "cmp")
+if not cmp_status then
+  print("nvim-cmp is not installed")
+  return
+end
+
+local luasnip_status, luasnip = pcall(require, "luasnip")
+if not luasnip_status then
+  print("LuaSnip is not installed")
+  return
+end
+
+require("luasnip.loaders.from_vscode").lazy_load() -- Load friendly snippets
+
+cmp.setup({
+  snippet = {
+    expand = function(args)
+      luasnip.lsp_expand(args.body) -- Use LuaSnip as the snippet engine
+    end,
+  },
+  mapping = cmp.mapping.preset.insert({
+    ["<C-Space>"] = cmp.mapping.complete(),  -- Trigger completion
+    ["<CR>"] = cmp.mapping.confirm({ select = true }), -- Confirm selection
+    ["<Tab>"] = cmp.mapping.select_next_item(), -- Navigate down
+    ["<S-Tab>"] = cmp.mapping.select_prev_item(), -- Navigate up
+  }),
+  sources = cmp.config.sources({
+    { name = "nvim_lsp" }, -- LSP-based completion
+    { name = "luasnip" }, -- Snippet completion
+    { name = "buffer" }, -- Buffer words
+    { name = "path" }, -- File path completion
+  }),
+})
+
+-- Command-line completion
+cmp.setup.cmdline("/", {
+  mapping = cmp.mapping.preset.cmdline(),
+  sources = {
+    { name = "buffer" },
+  },
+})
+
+cmp.setup.cmdline(":", {
+  mapping = cmp.mapping.preset.cmdline(),
+  sources = cmp.config.sources({
+    { name = "path" },
+    { name = "cmdline" },
+  }),
+})
+
+-- Integrate with nvim-autopairs
+local cmp_autopairs = require("nvim-autopairs.completion.cmp")
+cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
